@@ -1,0 +1,394 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RSA digital signature with SHA-256</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🔏</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{color-scheme:light dark;--bg:#e9edf1;--sf:#fbfcfd;--sf2:#f0f3f7;--ink:#0d1b2e;--mute:#566377;--line:#d2d9e3;--hatch:#cdd5e0;--alice:#b45f06;--alice-ink:#fff;--bob:#2748d9;--bob-ink:#fff;--strip:#2d4263;--ok:#0a7a5c;--okbg:#dff3ec;--bad:#cc2540;--badbg:#fde7ea;--sans:"Bricolage Grotesque",system-ui,-apple-system,"Segoe UI",sans-serif;--mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+@media(prefers-color-scheme:dark){:root{--bg:#0a111d;--sf:#111a2a;--sf2:#0c1422;--ink:#e6ecf5;--mute:#8c98ab;--line:#223049;--hatch:#1b2740;--alice:#f0a04b;--alice-ink:#1a1100;--bob:#8aa2ff;--bob-ink:#0a1230;--strip:#8fa3c8;--ok:#43d3a3;--okbg:#0e2b23;--bad:#ff7088;--badbg:#341820}}
+*{box-sizing:border-box}
+main{max-width:1200px;margin:0 auto;padding:48px 24px 72px}
+body{margin:0;color:var(--ink);font:15px/1.5 var(--sans);background:radial-gradient(900px 320px at 50% 0,color-mix(in srgb,var(--alice) 7%,transparent),transparent 70%),radial-gradient(760px 300px at 85% 8%,color-mix(in srgb,var(--bob) 8%,transparent),transparent 70%),var(--bg);background-attachment:fixed,fixed,fixed}
+/* header sits beside the rail, on the right, so the diagram starts higher */
+.lead{display:grid;grid-template-columns:minmax(0,1fr) minmax(320px,430px);gap:6px 42px;align-items:end;margin-bottom:26px}
+.lead header{margin:0;max-width:none}
+.lead h1{font-size:clamp(24px,2.6vw,34px);margin-bottom:8px}
+.lead .sub{font-size:15px}
+.badges{margin-top:12px}
+.rail{align-self:center;margin:0}
+.lead .rail{margin-bottom:0}
+@media(max-width:1150px){
+  .lead{grid-template-columns:1fr;gap:8px}
+  .lead header{max-width:60ch}
+}
+/* nudge the diagram a little to the right on wide screens */
+@media(min-width:1360px){.stage{transform:translateX(26px)}}
+h1{font:700 clamp(32px,4.6vw,48px)/1.02 var(--sans);letter-spacing:-.035em;margin:0 0 12px}
+.sub{color:var(--mute);margin:0;font-size:16.5px}
+.badges{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px}
+.badges span{font:500 12.5px/1 var(--mono);padding:6px 11px;border:1px solid var(--line);border-radius:99px;background:var(--sf);color:var(--mute)}
+:focus-visible{outline:2px solid var(--c,var(--ink));outline-offset:2px}
+
+/* progress rail */
+.rail{display:flex;margin:0 0 28px;padding:0;list-style:none;overflow-x:auto;padding-top:7px}
+.rail li{flex:1 0 82px;position:relative;padding-top:12px;font-size:13px;color:var(--mute);border-top:2px solid var(--line);transition:color .3s,border-color .3s}
+.rail li::before{content:"";position:absolute;top:-7px;left:0;width:12px;height:12px;border-radius:50%;background:var(--bg);border:2px solid var(--line);transition:.3s}
+.rail li small{font-size:12px;font-variant-numeric:tabular-nums;margin-right:4px}
+.rail li.on{color:var(--ink);border-color:var(--ink)}
+.rail li.on::before{background:var(--ink);border-color:var(--ink)}
+.rail li.now{font-weight:700}
+
+/* stage */
+.stage{display:grid;grid-template-columns:minmax(0,1fr) 184px minmax(0,1fr);align-items:stretch}
+.panel{background:var(--sf);border:1px solid var(--line);padding:28px 28px 30px}
+.alice{--c:var(--alice);--ci:var(--alice-ink);border-left:5px solid var(--alice);border-radius:18px 4px 4px 18px}
+.bob{--c:var(--bob);--ci:var(--bob-ink);border-right:5px solid var(--bob);border-radius:4px 18px 18px 4px}
+.panel,.chan{animation:enter .5s backwards}.chan{animation-delay:.08s}.bob{animation-delay:.16s}
+@keyframes enter{from{opacity:0;transform:translateY(10px)}}
+.ph{display:flex;align-items:center;gap:14px;margin-bottom:24px}
+.ph>div:not(.av){flex:1}
+.av{width:42px;height:42px;border-radius:50%;display:grid;place-items:center;font:700 18px/1 var(--sans);letter-spacing:-.02em;background:var(--c);color:var(--ci);flex:none}
+h2{font:700 26px/1.1 var(--sans);letter-spacing:-.025em;margin:0}
+.role{margin:5px 0 0;color:var(--mute);font-size:14px;max-width:34ch}
+.pill{flex:none;display:flex;align-items:center;gap:7px;font-size:12.5px;font-weight:600;padding:4px 11px 4px 9px;border-radius:99px;background:var(--sf2);border:1px solid var(--line);color:var(--mute);white-space:nowrap}
+.pill::before{content:"";width:7px;height:7px;border-radius:50%;background:currentColor}
+.pill.ok{color:var(--ok);background:var(--okbg);border-color:transparent}
+.pill.bad{color:var(--bad);background:var(--badbg);border-color:transparent}
+
+/* numbered steps (this really is a sequence) */
+.step{position:relative;padding:0 0 24px 44px}
+.step:last-child{padding-bottom:0}
+.step::before{content:"";position:absolute;left:13px;top:34px;bottom:6px;width:2px;background:var(--line)}
+.step:last-child::before{display:none}
+.n{position:absolute;left:0;top:0;width:28px;height:28px;border-radius:50%;display:grid;place-items:center;font-weight:700;font-size:13px;background:var(--c);color:var(--ci);font-variant-numeric:tabular-nums}
+.lbl{display:flex;justify-content:space-between;align-items:center;min-height:28px;margin:0 0 8px;font-weight:600;font-size:14.5px}
+.lbl small{font-weight:400;color:var(--mute);font-size:13px;display:block}
+input,textarea{width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--sf2);color:var(--ink);font:inherit;resize:vertical}
+input:focus,textarea:focus{border-color:var(--c)}
+textarea{min-height:76px}
+textarea.mono,input.mono{font:12.5px/1.5 var(--mono)}
+input[readonly]{color:var(--mute)}
+.code{margin:0;padding:10px 12px;background:var(--sf2);border:1px solid var(--line);border-radius:8px;font:12px/1.55 var(--mono);color:var(--mute);max-height:112px;overflow:auto;white-space:pre-wrap;word-break:break-all}
+
+/* buttons */
+button{font:600 14px var(--sans);padding:10px 18px;border-radius:8px;border:1px solid var(--line);background:var(--sf);color:var(--ink);cursor:pointer;transition:transform .12s,border-color .15s,opacity .15s}
+button:hover:not(:disabled){border-color:var(--ink)}
+button:active:not(:disabled){transform:translateY(1px)}
+button:disabled{opacity:.4;cursor:not-allowed}
+button.p{background:var(--c);color:var(--ci);border-color:var(--c);margin-top:14px}
+button.p:hover:not(:disabled){border-color:var(--c);opacity:.9}
+button.sm{padding:3px 10px;font-size:12.5px;font-weight:500}
+button.busy{position:relative;color:transparent!important}
+button.busy::after{content:"";position:absolute;inset:0;margin:auto;width:16px;height:16px;border-radius:50%;border:2px solid var(--ci);border-right-color:transparent;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* digest fingerprint: the thing to watch */
+.fp{border:1px solid var(--line);border-radius:8px;background:var(--sf2);padding:12px;--s:var(--strip);transition:border-color .3s}
+.fp.match{--s:var(--ok);border-color:color-mix(in srgb,var(--ok) 45%,var(--line))}
+.fp.diff{border-color:color-mix(in srgb,var(--bad) 45%,var(--line))}
+.strip{display:grid;grid-template-columns:repeat(32,1fr);gap:2px;height:24px;margin-bottom:11px}
+.strip i{border-radius:2px;background:color-mix(in srgb,var(--s) var(--v),var(--sf2));transform-origin:bottom;animation:rise .45s cubic-bezier(.2,.7,.3,1) backwards}
+.strip i.x{background:var(--bad);box-shadow:0 0 0 1px var(--bad)}
+@keyframes rise{from{transform:scaleY(0);opacity:0}}
+.hex{display:grid;grid-template-columns:repeat(4,auto);justify-content:space-between;gap:5px 8px;font:500 12.5px var(--mono)}
+.hex .b{padding:1px 0;border-radius:3px}
+.hex .b.x{background:var(--badbg);color:var(--bad);font-weight:700}
+.fpmsg{margin:0;color:var(--mute);font-size:13.5px}
+
+/* channel */
+.chan{position:relative;display:flex;flex-direction:column;align-items:center;gap:14px;padding:30px 16px;background:repeating-linear-gradient(135deg,transparent 0 9px,var(--hatch) 9px 10px);border-block:1px solid var(--line)}
+.chan h3{margin:0;font:700 15px var(--sans);text-align:center}
+.chan p{margin:0;font-size:13px;color:var(--mute);text-align:center;max-width:22ch}
+.lane{position:relative;width:100%;height:38px;margin:6px 0 4px}
+.lane::before{content:"";position:absolute;left:0;right:0;top:50%;border-top:2px dashed color-mix(in srgb,var(--ink) 30%,transparent)}
+.packet{position:absolute;left:0;top:0;width:38px;height:38px;border-radius:10px;background:var(--ink);color:var(--bg);display:grid;place-items:center;opacity:0}
+.packet svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.chan.go .packet{animation:fly 1.2s cubic-bezier(.6,0,.3,1) forwards}
+@keyframes fly{0%{left:0;opacity:0}12%{opacity:1}88%{opacity:1}100%{left:calc(100% - 38px);opacity:0}}
+.btns{display:flex;flex-direction:column;gap:8px;width:100%}
+button.atk{width:100%;border:1.5px dashed var(--bad);color:var(--bad);padding:9px 8px;font-size:13.5px}
+button.atk:hover:not(:disabled){border-color:var(--bad);background:var(--badbg)}
+
+/* bob */
+.wait{display:none;margin:0 0 20px;padding:12px 14px;border:1px dashed var(--line);border-radius:8px;color:var(--mute);font-size:14px}
+.bob.locked .wait{display:block}
+.bob.locked .bd{opacity:.38;pointer-events:none;filter:grayscale(.7)}
+.verdict{display:flex;gap:14px;align-items:flex-start;border-radius:10px;padding:16px;border:1px solid var(--line);background:var(--sf2);color:var(--mute)}
+.vi{flex:none;width:44px;height:44px;border-radius:50%;display:grid;place-items:center;border:2px solid currentColor}
+.vi svg{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round}
+.verdict strong{display:block;font:700 21px/1.2 var(--sans);letter-spacing:-.015em;color:inherit}
+.verdict p{margin:4px 0 0;color:var(--ink);font-size:14px}
+.verdict p.meta{color:var(--mute);font-size:13px;font-variant-numeric:tabular-nums}
+.verdict.ok{background:var(--okbg);color:var(--ok);border-color:transparent}
+.verdict.bad{background:var(--badbg);color:var(--bad);border-color:transparent;animation:shake .4s}
+.verdict.ok path,.verdict.bad path{stroke-dasharray:1;stroke-dashoffset:1;animation:draw .45s .1s ease-out forwards}
+@keyframes draw{to{stroke-dashoffset:0}}
+@keyframes shake{20%{transform:translateX(-6px)}45%{transform:translateX(5px)}70%{transform:translateX(-3px)}}
+.err{color:var(--bad);font-size:13.5px;margin-top:10px}.err:empty{display:none}
+.note{max-width:62ch;margin:30px 0 0;color:var(--mute);font-size:14px}
+#toast{position:fixed;bottom:24px;left:50%;transform:translate(-50%,80px);background:var(--ink);color:var(--bg);padding:9px 18px;border-radius:99px;font-size:13.5px;font-weight:500;transition:transform .25s;z-index:9}
+#toast.show{transform:translate(-50%,0)}
+
+@media(max-width:940px){
+  main{padding:32px 16px 56px}
+  .stage{grid-template-columns:minmax(0,1fr)}
+  .panel{padding:22px 18px 26px}
+  .alice{border-left:1px solid var(--line);border-top:5px solid var(--alice);border-radius:18px 18px 4px 4px}
+  .bob{border-right:1px solid var(--line);border-bottom:5px solid var(--bob);border-radius:4px 4px 18px 18px}
+  .chan{border-block:0;border-inline:1px solid var(--line);padding:20px 18px}
+  .btns{flex-direction:row}
+  .chan p{max-width:none}
+}
+@media(max-width:480px){.hex{grid-template-columns:repeat(2,auto)}.ph{flex-direction:column}}
+@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}.verdict path{stroke-dashoffset:0!important}}
+</style>
+</head>
+<body>
+<main>
+  <div class="lead">
+    <ol class="rail" id="rail" aria-label="Progress"></ol>
+    <header>
+      <h1>RSA digital signature</h1>
+      <p class="sub">Alice signs a message with her private key. Bob checks it with her public key. Alter one character in transit and watch the two SHA-256 digests stop matching.</p>
+      <div class="badges" aria-hidden="true"><span>RSA-2048</span><span>SHA-256</span><span>PKCS#1 v1.5</span><span>Keys: 2048-bit PEM, private stored owner-only (0o600)</span></div>
+    </header>
+  </div>
+
+  <div class="stage">
+    <!-- ALICE -->
+    <section class="panel alice" aria-labelledby="ha">
+      <div class="ph">
+        <div class="av" aria-hidden="true">A</div>
+        <div><h2 id="ha">Alice</h2><p class="role">Signs the message. Her private key never leaves the server.</p></div>
+        <span class="pill" id="apill">No key pair</span>
+      </div>
+
+      <div class="step"><span class="n">1</span>
+        <label class="lbl" for="name">Identity</label>
+        <input id="name" value="alice" maxlength="32" autocomplete="off" spellcheck="false">
+        <div class="lbl" style="margin-top:14px">Public key <button class="sm" data-copy="#pub">Copy</button></div>
+        <pre class="code" id="pub">No keys yet. Generate a key pair to begin.</pre>
+      </div>
+
+      <div class="step"><span class="n">2</span>
+        <label class="lbl" for="msg">Message</label>
+        <textarea id="msg">Pay Bob $100</textarea>
+      </div>
+
+      <div class="step"><span class="n">3</span>
+        <div class="lbl">SHA-256 digest <small>32 bytes</small></div>
+        <div class="fp" id="ahash"></div>
+      </div>
+
+      <div class="step"><span class="n">4</span>
+        <div class="lbl">Signature <button class="sm" data-copy="#sig">Copy</button></div>
+        <pre class="code" id="sig">Not signed yet.</pre>
+        <button class="p" id="sign" disabled>Sign and send to Bob</button>
+        <div class="err" id="aerr"></div>
+      </div>
+    </section>
+
+    <!-- NETWORK -->
+    <aside class="chan" id="chan" aria-label="Network between Alice and Bob">
+      <h3>The network</h3>
+      <div class="lane" aria-hidden="true"><div class="packet"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg></div></div>
+      <p>Anyone on the path can change what passes through.</p>
+      <div class="btns">
+        <button class="atk" id="tamper" disabled>Alter message</button>
+        <button class="atk" id="corrupt" disabled>Corrupt signature</button>
+      </div>
+    </aside>
+
+    <!-- BOB -->
+    <section class="panel bob locked" id="bobcard" aria-labelledby="hb">
+      <div class="ph">
+        <div class="av" aria-hidden="true">B</div>
+        <div><h2 id="hb">Bob</h2><p class="role">Verifies the message. Needs only Alice’s public key.</p></div>
+        <span class="pill" id="bpill">Waiting</span>
+      </div>
+      <div class="wait">Waiting for Alice to sign a message.</div>
+
+      <div class="bd">
+        <div class="step"><span class="n">5</span>
+          <label class="lbl" for="bsigner">Signer</label>
+          <input id="bsigner" readonly>
+          <label class="lbl" for="bmsg" style="margin-top:14px">Received message</label>
+          <textarea id="bmsg"></textarea>
+          <label class="lbl" for="bsig" style="margin-top:14px">Received signature</label>
+          <textarea id="bsig" class="mono"></textarea>
+          <button class="p" id="verify">Verify signature</button>
+          <div class="err" id="berr"></div>
+        </div>
+
+        <div class="step"><span class="n">6</span>
+          <div class="lbl">Digest recovered from the signature <small>public key</small></div>
+          <div class="fp" id="h1"><p class="fpmsg">—</p></div>
+        </div>
+
+        <div class="step"><span class="n">7</span>
+          <div class="lbl">Digest of the received message <small>computed by Bob</small></div>
+          <div class="fp" id="h2"><p class="fpmsg">—</p></div>
+        </div>
+
+        <div class="step"><span class="n">8</span>
+          <div class="lbl">Result</div>
+          <div class="verdict idle" id="verdict" role="status" aria-live="polite">
+            <div class="vi"><svg viewBox="0 0 24 24" id="vsvg"><path d="M8 12h8"/></svg></div>
+            <div><strong id="vt">Not verified yet</strong><p id="vr">Verify the signature to compare the two digests.</p><p class="meta" id="vm"></p></div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <p class="note">Matching digests mean the message is authentic and unchanged. Any difference means it was altered, or it wasn’t signed with this key.</p>
+</main>
+<div id="toast" role="status"></div>
+
+<script>
+const $ = s => document.querySelector(s);
+const LABELS = ['Keys','Message','Hash','Sign','Send','Decrypt','Re-hash','Compare'];
+$('#rail').innerHTML = LABELS.map((l,i)=>`<li><small>${i+1}</small>${l}</li>`).join('');
+const stage = n => document.querySelectorAll('#rail li').forEach((c,i)=>{ c.classList.toggle('on',i<n); c.classList.toggle('now',i===n-1); });
+
+async function api(path, body){
+  const r = await fetch(path, body && {method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)});
+  const j = await r.json().catch(()=>({}));
+  if(!r.ok) throw Object.assign(new Error(typeof j.detail==='string' ? j.detail : 'Request failed'),{status:r.status});
+  return j;
+}
+async function sha(m){
+  if(!(window.crypto&&crypto.subtle)) return null;
+  const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(m));
+  return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join('');
+}
+function toast(t){const e=$('#toast');e.textContent=t;e.classList.add('show');clearTimeout(toast.t);toast.t=setTimeout(()=>e.classList.remove('show'),1500)}
+const busy = (btn,on)=>{btn.disabled=on;btn.classList.toggle('busy',on)};
+const pill = (el,text,state='')=>{el.textContent=text;el.className='pill '+state};
+
+// Render a 32-byte digest as a strip plus hex. Bytes that differ from `other` turn red.
+// Returns how many bytes match.
+function fp(el, hex, other, anim){
+  el.replaceChildren(); el.classList.remove('match','diff');
+  if(!/^[0-9a-f]{64}$/i.test(hex||'')){
+    el.dataset.h='';
+    const p=document.createElement('p'); p.className='fpmsg'; p.textContent=hex||'—'; el.append(p); return 0;
+  }
+  let first = !/^[0-9a-f]{64}$/.test(el.dataset.h||'');
+  el.dataset.h=hex;
+  const strip=document.createElement('div'), grid=document.createElement('div');
+  strip.className='strip'; grid.className='hex';
+  let same=0, g;
+  for(let i=0;i<32;i++){
+    const byte=hex.slice(i*2,i*2+2);
+    const ok = !other || other.slice(i*2,i*2+2).toLowerCase()===byte.toLowerCase();
+    if(ok) same++;
+    const cell=document.createElement('i');
+    cell.style.setProperty('--v',(25+parseInt(byte,16)/255*75).toFixed(0)+'%');
+    if(anim||first) cell.style.animationDelay=(i*14)+'ms'; else cell.style.animation='none';
+    cell.title=`byte ${i} — 0x${byte} (${parseInt(byte,16)})`;
+    if(!ok) cell.className='x';
+    strip.append(cell);
+    if(i%4===0){ g=document.createElement('span'); grid.append(g); }
+    const b=document.createElement('span'); b.className='b'+(ok?'':' x'); b.textContent=byte; b.title=`byte ${i}`; g.append(b);
+  }
+  el.append(strip,grid);
+  return same;
+}
+
+// Alice: live digest of the message
+async function updateHash(){
+  const h = await sha($('#msg').value);
+  fp($('#ahash'), h ?? 'Browser hashing unavailable (needs localhost or HTTPS).');
+}
+$('#msg').addEventListener('input', ()=>{ updateHash(); $('#sig').textContent='Not signed yet.'; if($('#pub').dataset.ok) stage(3); });
+updateHash();
+
+// Setup: keys are provisioned ahead of any signing session, so we ensure they exist on load.
+async function ensureKeys(name, announce){
+  $('#aerr').textContent='';
+  if(!name){ $('#aerr').textContent = 'Choose an identity first.'; return; }
+  try{
+    let res;
+    try { res = await api('/keys',{name}); if(announce) toast('Key pair generated'); }
+    catch(e){ if(e.status===409){ res = await api(`/keys/${name}/public`); if(announce) toast('Keys already existed, loaded public key'); } else throw e; }
+    $('#pub').textContent = res.publicKey; $('#pub').dataset.ok = 1;
+    $('#sign').disabled = false; pill($('#apill'),'Key pair ready','ok'); stage(3);
+  }catch(e){ $('#aerr').textContent = e.message; pill($('#apill'),'No key pair','bad'); }
+}
+$('#name').addEventListener('change', () => ensureKeys($('#name').value.trim(), true));
+ensureKeys('alice');
+
+function setVerdict(state, title, reason, meta=''){
+  const v=$('#verdict'); v.className='verdict'; void v.offsetWidth; v.className='verdict '+state;
+  $('#vsvg').innerHTML = {idle:'<path d="M8 12h8"/>',ok:'<path d="M5 12.5l4.5 4.5L19 7.5" pathLength="1"/>',bad:'<path d="M6 6l12 12M18 6L6 18" pathLength="1"/>'}[state];
+  $('#vt').textContent=title; $('#vr').textContent=reason; $('#vm').textContent=meta;
+}
+
+// Sign
+$('#sign').onclick = async () => {
+  $('#aerr').textContent='';
+  busy($('#sign'),true);
+  try{
+    const r = await api('/sign',{signer:$('#name').value.trim(), message:$('#msg').value});
+    $('#sig').textContent = r.signature;
+    $('#bsigner').value = r.signer; $('#bmsg').value = r.message; $('#bsig').value = r.signature;
+    $('#bobcard').classList.remove('locked');
+    $('#tamper').disabled = $('#corrupt').disabled = false;
+    setVerdict('idle','Not verified yet','Verify the signature to compare the two digests.');
+    fp($('#h1'),'—'); fp($('#h2'),'—');
+    pill($('#bpill'),'Message received');
+    const c=$('#chan'); c.classList.remove('go'); void c.offsetWidth; c.classList.add('go');
+    stage(5); $('#bobcard').scrollIntoView({behavior:'smooth',block:'nearest'});
+  }catch(e){ $('#aerr').textContent = e.message; }
+  busy($('#sign'),false);
+};
+
+// In-transit attacks
+$('#tamper').onclick = () => {
+  const t=$('#bmsg'); const m=t.value.match(/\d/);
+  t.value = m ? t.value.replace(/\d/, d=>(+d+1)%10) : t.value+'!';
+  toast('Message altered in transit');
+};
+$('#corrupt').onclick = () => {
+  const t=$('#bsig'); const v=t.value; if(v.length<10) return;
+  const i=Math.floor(v.length/2); t.value = v.slice(0,i)+(v[i]==='A'?'B':'A')+v.slice(i+1);
+  toast('Signature corrupted');
+};
+
+// Verify
+$('#verify').onclick = async () => {
+  $('#berr').textContent='';
+  busy($('#verify'),true);
+  try{
+    const r = await api('/verify',{signer:$('#bsigner').value, message:$('#bmsg').value, signature:$('#bsig').value.trim()});
+    let meta='';
+    if(r.signedHash){
+      const same = fp($('#h1'), r.signedHash, r.computedHash, true);
+      fp($('#h2'), r.computedHash, r.signedHash, true);
+      meta = `${same} of 32 bytes match`;
+    } else {
+      fp($('#h1'),'No digest could be recovered from this signature.');
+      fp($('#h2'), (await sha($('#bmsg').value)) ?? '—');
+    }
+    $('#h1').classList.toggle('match',!!r.valid); $('#h2').classList.toggle('match',!!r.valid);
+    if(!r.valid && r.signedHash){ $('#h1').classList.add('diff'); $('#h2').classList.add('diff'); }
+    setVerdict(r.valid?'ok':'bad', r.valid?'Authentic and unmodified':'Verification failed', r.reason, meta);
+    pill($('#bpill'), r.valid?'Verified':'Rejected', r.valid?'ok':'bad');
+    stage(8);
+  }catch(e){ $('#berr').textContent = e.message; }
+  busy($('#verify'),false);
+};
+
+// Copy buttons
+document.querySelectorAll('[data-copy]').forEach(b=>b.onclick=()=>{
+  navigator.clipboard.writeText($(b.dataset.copy).textContent).then(()=>toast('Copied'));
+});
+</script>
+</body>
+</html>
